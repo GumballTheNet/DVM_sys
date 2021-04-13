@@ -1,0 +1,16 @@
+#For Legion PLATFORM
+# for DVM tools
+ CC='cc -g -O2'
+ CXX='c++ -g -O2'
+ LINKER='c++ -g'
+ LLVMCONFIG=''
+# for parallel programs
+ PCC='cc -g -O2 -fopenmp'
+ PCXX='c++ -g -O2 -fopenmp'
+ PFORT='f95 -g -O2 -fopenmp'
+ PLINKER='c++ -g -fopenmp'
+ PFLINKER='f95 -g -fopenmp'
+ ADD_LIBS=''
+ CUDA_PATH=''
+# launch settings
+ dvmrun='runplain'

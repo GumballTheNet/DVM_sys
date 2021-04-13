@@ -1,0 +1,30 @@
+#include <cstdio>
+#include <cstring>
+#include <fstream>
+#include <iostream>
+#include <cstdlib>
+#include "dvm.h"
+#undef IN_ANAL
+#include "aks_structs.h"
+
+void Print(SgExpression *cur) {
+	std::cout<<node->variant()<<endl;
+	if (node->lhs()) {
+		Print(node->lhs());
+	}
+	if (node->rhs()) {
+		Print(node->rhs());
+	}
+}
+
+int main()
+{
+ 	SgProject project("dvm.proj");
+ 	for (int i = 0; i < project.numberOfFiles(); i++){
+ 	    SgFile *f;
+ 	    f = &(project.file(i));
+ 	    SgStatement *s; 
+ 	    for ( s = f->firstStatement(); s; s = s->lexNext()){
+	        for (int i = 0; i < 3; ++i) {
+			if (s->expr(i)) {
+				

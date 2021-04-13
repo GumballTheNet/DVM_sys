@@ -1,0 +1,29 @@
+g++ -c -g -I. -I../Sage/lib/include -I../Sage/h -I../include my.cpp
+my.cpp: In function ‘void createsubal(SgStatement*, char*, bool, SgStatement*, SgVarRefExp*)’:
+my.cpp:63:46: error: ‘class SgFuncHedrStmt’ has no member named ‘symb’; did you mean ‘symbol’?
+  SgCallStmt *call = new SgCallStmt(*(ptfunc->symb o l()));
+                                              ^~~~
+                                              symbol
+my.cpp:63:51: error: expected ‘)’ before ‘o’
+  SgCallStmt *call = new SgCallStmt(*(ptfunc->symb o l()));
+                                                   ^
+my.cpp:63:57: error: no matching function for call to ‘SgCallStmt::SgCallStmt()’
+  SgCallStmt *call = new SgCallStmt(*(ptfunc->symb o l()));
+                                                         ^
+In file included from ../include/user.h:45:0,
+                 from ../include/dvm.h:2,
+                 from my.cpp:10:
+../Sage/lib/include/libSage++.h:7139:8: note: candidate: SgCallStmt::SgCallStmt(SgSymbol&)
+ inline SgCallStmt::SgCallStmt(SgSymbol &name):SgExecutableStatement(PROC_STAT)
+        ^~~~~~~~~~
+../Sage/lib/include/libSage++.h:7139:8: note:   candidate expects 1 argument, 0 provided
+../Sage/lib/include/libSage++.h:7133:8: note: candidate: SgCallStmt::SgCallStmt(SgSymbol&, SgExpression&)
+ inline SgCallStmt::SgCallStmt(SgSymbol &name, SgExpression &args):SgExecutableStatement(PROC_STAT)
+        ^~~~~~~~~~
+../Sage/lib/include/libSage++.h:7133:8: note:   candidate expects 2 arguments, 0 provided
+../Sage/lib/include/libSage++.h:2016:8: note: candidate: SgCallStmt::SgCallStmt(SgCallStmt&)
+ class  SgCallStmt: public SgExecutableStatement{
+        ^~~~~~~~~~
+../Sage/lib/include/libSage++.h:2016:8: note:   candidate expects 1 argument, 0 provided
+Makefile:42: recipe for target 'my.o' failed
+make: *** [my.o] Error 1

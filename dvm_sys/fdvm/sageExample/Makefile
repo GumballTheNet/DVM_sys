@@ -1,0 +1,43 @@
+ 
+#echo#######################################################################
+# Makefile for   Fortran DVM transformator
+#
+#echo#######################################################################
+
+# dvm/fdvm/fdvm_transform/makefile.uni
+
+SAGEROOT = ../Sage
+LIBDIR = ../lib
+BINDIR = ../../bin
+LIBINCLUDE = $(SAGEROOT)/lib/include
+HINCLUDE = $(SAGEROOT)/h
+DVMINCLUDE = ../include
+EXECUTABLES = fdvm_transform
+
+LOADER = $(CXX)
+
+INCL = -I. -I$(LIBINCLUDE) -I$(HINCLUDE) -I$(DVMINCLUDE)
+
+CFLAGS = -c $(INCL)
+LDFLAGS =
+
+LIBS = $(LIBDIR)/libSage++.a $(LIBDIR)/libsage.a $(LIBDIR)/libdb.a
+OBJS = SwapFors.o
+
+
+$(BINDIR)/$(EXECUTABLES): $(OBJS)
+	$(LOADER) $(LDFLAGS) -o $(BINDIR)/$(EXECUTABLES) $(OBJS) $(LIBS)
+
+all: $(BINDIR)/$(EXECUTABLES)
+	@echo "****** COMPILING $(EXECUTABLES) DONE ******"
+
+clean:
+	rm -f $(OBJS)
+cleanall:
+	rm -f $(OBJS)
+
+############################# dependencies ############################
+
+
+Swa: SwapFors.cpp $(DVMINCLUDE)/dvm.h
+	g++ SwapFors.cpp

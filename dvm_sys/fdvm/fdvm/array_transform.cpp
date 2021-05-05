@@ -54,8 +54,7 @@ map<string, set<string>> mod_publics;
 map<string, vector<SgStatement *>> procedure_calls;
 set<SgStatement *> uses;
 set<string> remain_files;
-map<SgStatement *, SgStatement *>
-    last_declarations; //потом работаем с этим вместо вычисления каждый раз myLastDeclaration
+map<SgStatement *, SgStatement *> last_declarations; 
 map<string, map<string, map<int, int>>> dynamic_array_shapes;
 set<string> cycle_funs;
 map<string, vector<string>> not_visible_files;
@@ -67,6 +66,8 @@ int dec_count = 0;
 map<string, string> mod_dec;
 map<string, string> com_mod_names;
 int is_changed = 0;
+
+int trans_count = 0, tot_count = 0;
 
 SgStatement *myLastDeclaration(SgStatement *st) {
     SgStatement *res = st;
@@ -466,6 +467,7 @@ void main_parse(SgExpression *node_s, bool con_fl, SgStatement *st, SgStatement 
                     }
                 }
                 int is_implicit = 0;
+                trans_count++;
                 SgExpression *cur_dim = ar_type->sizeInDim(0);
                 SgArrayRefExp *arr = new SgArrayRefExp(*current_variable->symbol()),
                               *dearr = new SgArrayRefExp(*current_variable->symbol()),
@@ -853,9 +855,11 @@ void superfun(SgExprListExp *exp, bool mode, bool fl, SgStatement *st, SgStateme
                                                                     : 0
                                                               : 0;
                     if (var) {
-                        ;
                         SgExpression *current_variable = var == 1 ? decl_st->var(j) : decl_st->var(j)->operand(1);
                         if (exp->elem(i)->symbol()->type()->variant() == T_ARRAY) {
+							if (!mode) {
+								tot_count--;
+							}
                             SgArrayType *arr = static_cast<SgArrayType *>(current_variable->symbol()->type());
                             if (mode) {
                                 for (int k = 0; k < arr->dimension(); k++) {
@@ -1031,7 +1035,7 @@ void superfun(SgExprListExp *exp, bool mode, bool fl, SgStatement *st, SgStateme
                                         findinit(cur_modules, modules_names, param_st->value(j), dims, par_dims, mod,
                                                  last_declarations[func]->lexNext(), last_declarations[mod]->lexNext());
                                     }
-                                } //мб тут тоже инициализацию без mode
+                                } 
                                 identifiers.insert(decl_st->var(j)->symbol()->identifier());
                             }
                         }
@@ -1055,10 +1059,11 @@ void superfun(SgExprListExp *exp, bool mode, bool fl, SgStatement *st, SgStateme
             }
         } while (current_st != last_declarations[now]);
     }
-    //работаем с data стейтментами
+
     if (!mode) {
         return;
     }
+
     string func_name = create_hash(wh(st));
     for (int i = 0; i < exp->length(); ++i) {
         for (long unsigned int m = 0; m < parsed_data[func_name].size(); ++m) {
@@ -1067,11 +1072,14 @@ void superfun(SgExprListExp *exp, bool mode, bool fl, SgStatement *st, SgStateme
                 pos = parsed_data[func_name][m].first.length();
             }
             if (exp->elem(i)->symbol()->identifier() == parsed_data[func_name][m].first.substr(0, pos)) {
+
                 SgStatement *tmp =
                     new SgStatement(DATA_DECL, nullptr, nullptr, new SgExpression(STMT_STR), nullptr, nullptr);
                 string &str = parsed_data[func_name][m].second;
                 int first = 0;
+
                 for (long unsigned int i = 0; i < str.length();) {
+
                     while (i < str.length() && str[i] != '+' && str[i] != '*' && str[i] != '-' && str[i] != '/' &&
                            str[i] != ',') {
                         ++i;
@@ -1079,6 +1087,7 @@ void superfun(SgExprListExp *exp, bool mode, bool fl, SgStatement *st, SgStateme
                     string name = str.substr(first, i - first);
                     int find_fl = 0;
                     for (auto iter = cur_modules.begin(); iter != cur_modules.end(); ++iter) {
+
                         SgStatement *cur_sp = *iter;
                         char *symbol_name = (*iter)->symbol()->identifier();
                         if ((*iter)->variant() == MODULE_STMT &&
@@ -1096,10 +1105,16 @@ void superfun(SgExprListExp *exp, bool mode, bool fl, SgStatement *st, SgStateme
                         for (auto st = cur_sp; st != fin_st; st = st->lexNext()) {
                             bool fl = if_parameter(st);
                             if (st->variant() == PARAM_DECL) {
+
                                 SgParameterStmt *param_st = static_cast<SgParameterStmt *>(st);
-                                for (int j = 0; j < param_st->numberOfConstants(); ++j) {
-                                    if (param_st->constant(j)->identifier() == name) {
-                                        if (par_dims[param_st->constant(j)->identifier()] < 1) {
+                                SgExprListExp *const_list =  static_cast<SgExprListExp*>(param_st->expr(0));
+                                for (int j = 0; j < const_list->length(); ++j) {
+									SgSymbol *cur_const = const_list->elem(j)->variant() == ASSGN_OP ? 	const_list->elem(j)->operand(1)->symbol() 
+									:	const_list->elem(j)->symbol() ;							
+									SgExpression *cur_val = const_list->elem(j)->variant() == ASSGN_OP ? 	const_list->elem(j)->operand(2)
+									:	param_st->value(j) ;								    	
+                                    if (cur_const->identifier() == name) {
+                                        if (par_dims[cur_const->identifier()] < 1) {
                                             auto fin_st = last_declarations[cur_sp]->lexNext();
                                             for (auto tmp = cur_sp; tmp != fin_st; tmp = tmp->lexNext()) {
                                                 if (tmp->variant() == VAR_DECL) {
@@ -1119,9 +1134,9 @@ void superfun(SgExprListExp *exp, bool mode, bool fl, SgStatement *st, SgStateme
                                                     }
                                                 }
                                             }
-                                            par_dims[param_st->constant(j)->identifier()]++;
+                                            par_dims[cur_const->identifier()]++;
                                             if (now->variant() != MODULE_STMT) {
-                                                findinit(cur_modules, modules_names, param_st->value(j), dims, par_dims,
+                                                findinit(cur_modules, modules_names, cur_val, dims, par_dims,
                                                          mod, last_declarations[func]->lexNext(),
                                                          last_declarations[mod]->lexNext());
                                             } else {
@@ -1129,12 +1144,12 @@ void superfun(SgExprListExp *exp, bool mode, bool fl, SgStatement *st, SgStateme
                                                 new_mod.insert(now);
                                                 map<string, map<string, string>> new_names;
                                                 new_names[symbol_name][string(";all;")] = string(";all;");
-                                                findinit(new_mod, new_names, param_st->value(j), dims, par_dims, mod,
+                                                findinit(new_mod, new_names,cur_val, dims, par_dims, mod,
                                                          last_declarations[func]->lexNext(),
                                                          last_declarations[mod]->lexNext());
                                             }
                                             SgVarDeclStmt *new_st = new SgVarDeclStmt(*new SgExprListExp(
-                                                *new SgExpression(ASSGN_OP, new SgVarRefExp(param_st->constant(j)),
+                                                *new SgExpression(ASSGN_OP, new SgVarRefExp(cur_const),
                                                                   param_st->value(j))));
                                             if (param_st->expr(1)) {
                                                 new_st->setExpression(1, param_st->expr(1)->copy());
@@ -1167,7 +1182,10 @@ void superfun(SgExprListExp *exp, bool mode, bool fl, SgStatement *st, SgStateme
                                             update_last_declaration(mod, new_st, 1);
                                         }
                                     }
+                                                                                            cout<<"bb"<<endl;
+
                                 }
+
                             }
                             if (fl) {
                                 st->setVariant(VAR_DECL);
@@ -1176,6 +1194,7 @@ void superfun(SgExprListExp *exp, bool mode, bool fl, SgStatement *st, SgStateme
                     }
                     i = i + 1;
                     first = i;
+
                 }
                 int has_string_intializers = 0, gl_c = 0;
                 for (long unsigned int t = 0; t < parsed_data[func_name][m].second.length(); ++t) {
@@ -1199,12 +1218,16 @@ void superfun(SgExprListExp *exp, bool mode, bool fl, SgStatement *st, SgStateme
                     NODE_STR(tmp->expr(0)->thellnd) = (char *)buf_str->c_str();
                     func->lastExecutable()->insertStmtAfter(*tmp, *func);
                 }
+
             }
+
         }
     }
+
 }
 
 void BlocktoMod(SgExpression *expr, SgStatement *st, SgFile &f, int mode) {
+
     SgStatement *mod = nullptr, *ptfunc = nullptr;
     SgNestedVarListDeclStmt *decl_st = static_cast<SgNestedVarListDeclStmt *>(st);
     SgExprListExp *exp_list = static_cast<SgExprListExp *>(decl_st->list(0));
@@ -1519,8 +1542,7 @@ void data_parse(SgProject &proj) {
                                                     cur_decl->var(k)->variant() == ARRAY_REF) {
                                                     auto type = cur_decl->var(k)->symbol()->type();
                                                     auto ar_type = isSgArrayType(type);
-                                                    var_size =
-                                                        1; //добавить обработку того случая, когда размер невычислим!
+                                                    var_size = 1; 
                                                     for (int j = 0; j < ar_type->dimension(); j++) {
                                                         var_size *= calculate_size(ar_type->sizeInDim(j), cur_modules,
                                                                                    modules_names);
@@ -1576,7 +1598,6 @@ void data_parse(SgProject &proj) {
                     cur_st = tmp;
                     continue;
                 }
-                //здесь удаляем переменные из множества to_del используя позиции var_pos и val_pos
                 vector<pair<int, int>> final_del;
                 for (int j = parsed_data[name].size(); j >= (int)parsed_data[name].size() - current_count; j--) {
                     if (to_del_vars.find(j) != to_del_vars.end()) {
@@ -1613,10 +1634,11 @@ void data_parse(SgProject &proj) {
             cur_st = tmp;
         }
     }
+
 }
 
 double find_val(SgExpression *exp, set<SgStatement *> &current_modules,
-                map<string, map<string, string>> &modules_names) { //добавить обработку модулей, как в суперфун
+                map<string, map<string, string>> &modules_names) { 
     for (auto iter = current_modules.begin(); iter != current_modules.end(); ++iter) {
         SgStatement *now = *iter, *start = now;
         char *name = now->symbol()->identifier();
@@ -1907,7 +1929,7 @@ void insert_include(set<string> &found_files, set<string> &visited_files, SgStat
 
 void unparse_fun(SgStatement *st_beg, SgStatement *last_st, string &current_file, string &first_file,
                  set<string> &visited_files, map<string, list<string>> &include_structure,
-                 map<string, list<string>> &full_include_structure) { //доделать!!!
+                 map<string, list<string>> &full_include_structure) { 
     std::ofstream out;
     set<string> pre_visited_files;
     SgStatement *st = st_beg->lexNext();
@@ -1946,7 +1968,7 @@ void unparse_fun(SgStatement *st_beg, SgStatement *last_st, string &current_file
                     visited_files.find(get_real_file_name(st)) == visited_files.end()) {
                     SgStatement *last_st = nullptr;
                     tmp = st->lastNodeOfStmt()->lexNext();
-                    if (st->variant() == INTERFACE_STMT) { //из-за специфики интерфейсов
+                    if (st->variant() == INTERFACE_STMT) { 
                         last_st = st->lastNodeOfStmt()->lastNodeOfStmt()->lexNext();
                         tmp = st->lastNodeOfStmt()->lastNodeOfStmt()->lexNext();
                     } else {
@@ -2049,6 +2071,7 @@ SgStatement *dyn_to_stat(SgStatement *st) {
             }
             continue;
         }
+        trans_count++;
         SgVarDeclStmt *new_decl_st =
             new SgVarDeclStmt(*new SgExprListExp(*new SgArrayRefExp(*cur_var->symbol(),
                                                                     *transformable_array_sizes[space_name][cur_name])),
@@ -2265,6 +2288,7 @@ string find_name(SgFunctionSymb *&cur_sym, string &cur_fun, SgProject &proj, SgS
 
 bool find_array_dim(SgSymbol *cur_sym, string &cur_fun, string &his_fun, int arg_num, SgProject &proj,
                     SgFunctionSymb *fun_sym) {
+
     SgStatement *fun_space = fun_sym->body(), *las_fun_dec = last_declarations[fun_space]->lexNext();
     SgSymbol *cur_arg = fun_sym->parameter(arg_num);
     int true_dims = 0, is_found = 0;
@@ -2283,7 +2307,9 @@ bool find_array_dim(SgSymbol *cur_sym, string &cur_fun, string &his_fun, int arg
             }
         }
     }
+
     for (SgStatement *mod : modules) {
+
         string mod_name = create_hash(mod);
         map<string, string>::iterator it;
         if ((it = find_if(mods_uses[mod_name][cur_fun].begin(), mods_uses[mod_name][cur_fun].end(),
@@ -2294,6 +2320,7 @@ bool find_array_dim(SgSymbol *cur_sym, string &cur_fun, string &his_fun, int arg
                 if (st->variant() == VAR_DECL) {
                     SgVarDeclStmt *dec_st = static_cast<SgVarDeclStmt *>(st);
                     int sym_num = dec_st->numberOfVars();
+
                     for (int k = 0; k < sym_num; ++k) {
                         SgSymbol *var =
                             dec_st->var(k)->symbol() ? dec_st->var(k)->symbol() : dec_st->var(k)->operand(1)->symbol();
@@ -2324,7 +2351,8 @@ bool find_array_dim(SgSymbol *cur_sym, string &cur_fun, string &his_fun, int arg
                 SgSymbol *var =
                     dec_st->var(k)->symbol() ? dec_st->var(k)->symbol() : dec_st->var(k)->operand(1)->symbol();
                 if (string(var->identifier()) == string(cur_sym->identifier())) {
-                    int his_dims = static_cast<SgArrayType *>(dec_st->var(k)->symbol()->type())->dimension();
+
+                    int his_dims = static_cast<SgArrayType *>(var->type())->dimension();
                     if ((dynamic_array_shapes[cur_fun][his_fun].find(arg_num) !=
                              dynamic_array_shapes[cur_fun][his_fun].end() &&
                          dynamic_array_shapes[cur_fun][his_fun][arg_num] != his_dims) ||
@@ -2391,7 +2419,9 @@ void parse_exp_forward(string cur_fun, SgExpression *exp, SgProject &proj, set<s
     if (!exp) {
         return;
     }
+
     if (exp->variant() == FUNC_CALL) {
+
         SgFunctionCallExp *fun_exp = static_cast<SgFunctionCallExp *>(exp);
         SgFunctionSymb *cur_sym = isSgFunctionSymb(exp->symbol());
         SgStatement *res = nullptr;
@@ -2406,6 +2436,7 @@ void parse_exp_forward(string cur_fun, SgExpression *exp, SgProject &proj, set<s
                 not_transformable_ars_stat_to_dyn[cur_name].insert(cur_sym->result()->identifier());
             }
         }
+
         for (int i = 0; i < cur_sym->numberOfParameters(); ++i) {
             string cur_param_name(cur_sym->parameter(i)->identifier());
             SgExpression *cur_arg = fun_exp->arg(i);
@@ -2427,6 +2458,7 @@ void parse_exp_forward(string cur_fun, SgExpression *exp, SgProject &proj, set<s
                 continue;
             }
             for (int j = 0; j < ars_ref->length(); ++j) {
+
                 string cur_sym_name(ars_ref->elem(j)->symbol()->identifier());
                 if (fl == 0) {
                     bool if_good = find_array_dim(ars_ref->elem(j)->symbol(), cur_fun, cur_name, i, proj, cur_sym);
@@ -2440,6 +2472,7 @@ void parse_exp_forward(string cur_fun, SgExpression *exp, SgProject &proj, set<s
                                     not_transformable_ars_dyn_to_stat[cur_fun].end())) {
                     dyn_to_stat_ars[cur_name].insert(cur_param_name);
                 }
+
                 if (transformable_array_sizes[cur_fun][cur_sym_name] == nullptr ||
                     susp_ars.find(cur_sym_name) != susp_ars.end() ||
                     transformable_array_sizes[cur_name][cur_param_name] != nullptr) {
@@ -2468,7 +2501,9 @@ void parse_exp_forward(string cur_fun, SgExpression *exp, SgProject &proj, set<s
                 }
             }
         }
+
     }
+
     parse_exp_forward(cur_fun, exp->lhs(), proj, susp_ars, fl);
     parse_exp_forward(cur_fun, exp->rhs(), proj, susp_ars, fl);
 }
@@ -2616,7 +2651,9 @@ void find_transformable_ars(string cur_fun, SgProject &proj, int repeat_fl, set<
                 now = module;
             }
             if (create_hash(now) == cur_fun || module != nullptr) {
+				                                
                 if (!repeat_fl) {
+
                     set<SgStatement *> cur_modules;
                     map<string, map<string, string>> modules_names;
                     init_module_stat(now, cur_modules, modules_names);
@@ -2820,11 +2857,13 @@ void find_transformable_ars(string cur_fun, SgProject &proj, int repeat_fl, set<
                             }
                         }
                     }
+
                 }
                 if (module == nullptr) {
                     int sum_decs = not_transformable_ars_dyn_to_stat[cur_fun].size() +
                                    not_transformable_ars_stat_to_dyn[cur_fun].size() + dyn_to_stat_ars[cur_fun].size() +
                                    stat_to_dyn_ars[cur_fun].size() + transformable_array_sizes[cur_fun].size();
+
                     for (SgStatement *st : raw_func_calls[cur_fun]) {
                         if (st->variant() == PROC_STAT) {
                             SgCallStmt *call_st = static_cast<SgCallStmt *>(st);
@@ -2856,6 +2895,7 @@ void find_transformable_ars(string cur_fun, SgProject &proj, int repeat_fl, set<
                             cycle_funs.insert(new_name);
                         }
                     }
+
                     for (SgStatement *st : raw_func_calls[cur_fun]) {
                         if (st->variant() == PROC_STAT) {
                             SgFunctionSymb *cur_sym = isSgFunctionSymb(st->symbol());
@@ -2877,6 +2917,7 @@ void find_transformable_ars(string cur_fun, SgProject &proj, int repeat_fl, set<
                             }
                         }
                     }
+
                     int new_sum = not_transformable_ars_dyn_to_stat[cur_fun].size() +
                                   not_transformable_ars_stat_to_dyn[cur_fun].size() + dyn_to_stat_ars[cur_fun].size() +
                                   stat_to_dyn_ars[cur_fun].size() + transformable_array_sizes[cur_fun].size();
@@ -2886,6 +2927,7 @@ void find_transformable_ars(string cur_fun, SgProject &proj, int repeat_fl, set<
                             find_transformable_ars(cur_fun, proj, repeat_fl, visited_spaces);
                         }
                     }
+
                 } else {
                     map<string, set<string>> checked_mod_vars;
                     for (auto mod = mods_uses[cur_fun].begin(); mod != mods_uses[cur_fun].end(); ++mod) {
@@ -3147,7 +3189,7 @@ void insert_interfaces(SgProject &project) {
             }
             for (auto &cur_pair : funs_funs_calls[fun_name]) {
                 string call_name = cur_pair.second.first;
-
+cout<<"zz"<<endl;
                 SgStatement *cur_fun_st = cur_pair.first;
                 if (!cur_fun_st) {
                     continue;
@@ -3191,6 +3233,7 @@ void insert_interfaces(SgProject &project) {
                             if (t == st_spec->length()) {
                                 break;
                             }
+                            cout<<"llll"<<endl;
                             create_interface(project, fun_st, call_name, fun_name);
                             interfaces_decls[fun_name].insert(call_name);
                             inserted = 1;
@@ -3355,6 +3398,7 @@ void transform_all(SgProject &project, map<string, set<string>> &map_to_fill, in
                                 cur_var = dec_st->var(k)->operand(1);
                             }
                             if (cur_var->symbol()->type()->variant() == T_ARRAY) {
+								tot_count++;
                                 if (if_auto) {
                                     SgArrayType *ar_type = static_cast<SgArrayType *>(cur_var->symbol()->type());
                                     int n_dim = ar_type->dimension();
@@ -3663,6 +3707,7 @@ int main(int argc, char **argv) {
             }
         }
     }
+
     if (!main_fun) {
         cout << "ERROR: NO MAIN FUNCTIONS" << endl;
         return 1;
@@ -3759,6 +3804,7 @@ int main(int argc, char **argv) {
             }
         }
     }
+
     modules.clear();
     for (int i = 0; i < project.numberOfFiles(); ++i) {
         for (SgStatement *st = project.file(i).firstStatement(); st; st = st->lexNext()) {
@@ -3770,17 +3816,21 @@ int main(int argc, char **argv) {
     fill_mod_use(project);
     string pr("program");
     set<string> visited_spaces;
+
     find_transformable_ars(pr, project, 0, visited_spaces);
+
     visited_spaces.clear();
+
     for (int i = 0; i < project.numberOfFiles(); ++i) {
         for (SgStatement *current_st = f->firstStatement(); current_st; current_st = current_st->lexNext()) {
             if (current_st->variant() == MODULE_STMT || current_st->variant() == BLOCK_DATA) {
-                string name = create_hash(current_st); //мб не надо
+                string name = create_hash(current_st); 
                 find_transformable_ars(name, project, 0, visited_spaces, current_st);
             }
         }
     }
     visited_spaces.clear();
+
     do {
         is_changed = 0;
         find_transformable_ars(pr, project, 1, visited_spaces);
@@ -3818,6 +3868,7 @@ int main(int argc, char **argv) {
             }
         }
     }
+
     for (int i = 0; i < project.numberOfFiles(); ++i) {
         for (SgStatement *current_st = f->firstStatement(); current_st;) {
             SgStatement *tmp = current_st->lexNext();
@@ -4018,5 +4069,6 @@ int main(int argc, char **argv) {
         unparse_fun(project.file(i).firstStatement(), st, name, dum_name, visited_files, include_structure,
                     copy_struct);
     }
+    cout<<trans_count<<' '<<tot_count<<endl;
     return 0;
 }
